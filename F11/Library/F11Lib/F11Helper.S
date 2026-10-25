@@ -24,6 +24,9 @@ startlabel:
   ldr	x5, =ArmPlatformPeiBootAction
   cmp	x4, x5
   bne	docopy
+  // Save DTB address from ABL (passed in x0) into 0x83300000 (PcdDeviceTreeStore)
+  ldr	x1, =0x83300000
+  str	x0, [x1]
   ret
 docopy:
   // find our start address by getting our expected offset, then subtracting it from our actual address
@@ -41,6 +44,10 @@ loop:
   stp	x2, x3, [x6], #16
   subs	x5, x5, #16
   b.ne	loop
+
+  // Save DTB address from ABL (passed in x0) into 0x83300000 (PcdDeviceTreeStore)
+  ldr	x1, =0x83300000
+  str	x0, [x1]
   ret
 .ltorg
 

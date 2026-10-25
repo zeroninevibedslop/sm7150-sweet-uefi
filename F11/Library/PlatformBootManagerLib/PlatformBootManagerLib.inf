@@ -84,6 +84,7 @@
   gUefiShellFileGuid
 
 [Protocols]
+  gEfiBlockIoProtocolGuid
   gEfiDevicePathProtocolGuid
   gEfiGraphicsOutputProtocolGuid
   gEfiLoadedImageProtocolGuid

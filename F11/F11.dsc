@@ -251,6 +251,7 @@
   MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
   MdeModulePkg/Universal/Disk/UnicodeCollation/EnglishDxe/EnglishDxe.inf
   FatPkg/EnhancedFatDxe/Fat.inf
+  F11/Drivers/InitrdBlockDxe/InitrdBlockDxe.inf
 
   #
   # ACPI Support

@@ -29,6 +29,7 @@
 !include F11/CommonDsc.dsc.inc
 
 [LibraryClasses.common]
+  FdtLib|EmbeddedPkg/Library/FdtLib/FdtLib.inf
   ArmLib|ArmPkg/Library/ArmLib/ArmBaseLib.inf
   ArmPlatformLib|F11/Library/F11Lib/F11Lib.inf
   CompilerIntrinsicsLib|ArmPkg/Library/CompilerIntrinsicsLib/CompilerIntrinsicsLib.inf
@@ -231,6 +232,7 @@
   F11/Drivers/KeypadDxe/KeypadDxe.inf
   F11/F11Dxe/F11Dxe.inf
   F11/SimpleFbDxe/SimpleFbDxe.inf
+  F11/Drivers/InitrdBlockDxe/InitrdBlockDxe.inf
 #  F11/Drivers/LogoDxe/LogoDxe.inf
 
   #

@@ -150,13 +150,14 @@ STATIC
 VOID
 PushKey (
   IN KEYPAD_RETURN_API  *KeypadReturnApi,
-  IN UINT16              ScanCode
+  IN UINT16              ScanCode,
+  IN CHAR16              UnicodeChar
   )
 {
   EFI_KEY_DATA  KeyData;
 
   KeyData.Key.ScanCode            = ScanCode;
-  KeyData.Key.UnicodeChar         = 0;
+  KeyData.Key.UnicodeChar         = UnicodeChar;
   KeyData.KeyState.KeyShiftState  = 0;
   KeyData.KeyState.KeyToggleState = 0;
 
@@ -197,8 +198,9 @@ KeypadGetKeys (
     return EFI_DEVICE_ERROR;
   }
 
-  Pwr   = (Rt & (1u << PON_KPDPWR_BIT)) != 0;
-  VolDn = (Rt & (1u << PON_RESIN_BIT))  != 0;
+  // Check both GEN2 (bits 0,1) and GEN3 (bits 7,6) on PMIC PON
+  Pwr   = ((Rt & (1u << PON_KPDPWR_BIT)) != 0) || ((Rt & (1u << 7)) != 0);
+  VolDn = ((Rt & (1u << PON_RESIN_BIT))  != 0) || ((Rt & (1u << 6)) != 0);
 
   // Vol-Up: GPIO2 do pm6150l, ACTIVE_LOW (pressionado = bit 0 em zero).
   {
@@ -206,17 +208,17 @@ KeypadGetKeys (
     BOOLEAN VolUp = (Gu != 0xFFFFFFFF) && ((Gu & VOLUP_VAL_MASK) == 0);
 
     if (VolUp && !mLastVolUp) {
-      PushKey (KeypadReturnApi, SCAN_VOLUME_UP);   // -> menu sobe
+      PushKey (KeypadReturnApi, SCAN_UP, 0);
     }
     mLastVolUp = VolUp;
   }
 
   // Deteccao de borda (so na transicao solto->apertado) — sem auto-repeat.
   if (Pwr && !mLastPwr) {
-    PushKey (KeypadReturnApi, SCAN_SUSPEND);       // -> menu mapeia pra Enter
+    PushKey (KeypadReturnApi, SCAN_SUSPEND, CHAR_CARRIAGE_RETURN);
   }
   if (VolDn && !mLastVolDn) {
-    PushKey (KeypadReturnApi, SCAN_VOLUME_DOWN);   // -> menu desce
+    PushKey (KeypadReturnApi, SCAN_DOWN, 0);
   }
 
   mLastPwr   = Pwr;

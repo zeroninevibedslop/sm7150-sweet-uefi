@@ -1,0 +1,40 @@
+#/** @file
+#
+#  InitrdBlockDxe - Creates an EFI_BLOCK_IO_PROTOCOL device for the
+#  SWEETESP ramdisk loaded by ABL into memory.
+#
+#**/
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = InitrdBlockDxe
+  FILE_GUID                      = b1ab4794-19cd-42ab-8c08-166f210e9902
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = InitrdBlockDxeEntryPoint
+
+[Sources]
+  InitrdBlockDxe.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  EmbeddedPkg/EmbeddedPkg.dec
+
+[LibraryClasses]
+  UefiDriverEntryPoint
+  UefiBootServicesTableLib
+  BaseLib
+  BaseMemoryLib
+  CacheMaintenanceLib
+  MemoryAllocationLib
+  DevicePathLib
+  DebugLib
+  FdtLib
+
+[Protocols]
+  gEfiBlockIoProtocolGuid       ## PRODUCES
+  gEfiDevicePathProtocolGuid    ## PRODUCES
+
+[Depex]
+  TRUE

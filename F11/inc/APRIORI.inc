@@ -33,6 +33,14 @@ APRIORI DXE {
   INF MdeModulePkg/Universal/Console/GraphicsConsoleDxe/GraphicsConsoleDxe.inf
 
   #
+  # Ramdisk block device & FAT filesystem (BEFORE BDS!)
+  #
+  INF F11/Drivers/InitrdBlockDxe/InitrdBlockDxe.inf
+  INF MdeModulePkg/Universal/Disk/DiskIoDxe/DiskIoDxe.inf
+  INF MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
+  INF FatPkg/EnhancedFatDxe/Fat.inf
+
+  #
   # ================= STRIP-DOWN: BOOT MINIMO =================
   # TODOS os binarios Qualcomm (Smem, HWIO, ChipInfo, Clock, Pmic, Rpmh, Scm,
   # SPMI, Tz, UFS, Pdc, Npa, CmdDb, ShmBridge, DALTLMM, DDRInfo, PlatformInfo,

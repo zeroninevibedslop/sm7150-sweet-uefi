@@ -26,9 +26,11 @@
 #include <Library/UefiLib.h>
 #include <Library/PrintLib.h>
 #include <Protocol/DevicePath.h>
+#include <Protocol/BlockIo.h>
 #include <Protocol/EsrtManagement.h>
 #include <Protocol/GraphicsOutput.h>
 #include <Protocol/LoadedImage.h>
+#include <Protocol/SimpleFileSystem.h>
 #include <Guid/EventGroup.h>
 #include <Guid/TtyTerm.h>
 #include <Configuration/BootDevices.h>
@@ -432,28 +434,8 @@ PlatformRegisterOptionsAndKeys (
   VOID
   )
 {
-  //
-  // FILE_GUID do SimpleInitMain.inf (UEFI_APPLICATION = o menu GUI).
-  // Bootamos o menu SimpleInit (desenha direto no framebuffer) em vez da
-  // UEFI Shell, que travava num ASSERT(Device Error) interno por causa do
-  // console serial sem input (FrameBufferSerialPortLib e output-only).
-  //
-  STATIC CONST EFI_GUID  SimpleInitFileGuid = {
-    0x6D77B2BB, 0x69EB, 0x42AB, { 0xBE, 0xCF, 0x4F, 0x40, 0xC8, 0x95, 0x68, 0xC3 }
-  };
-  INTN MenuOption;
-
-  MenuOption = PlatformRegisterFvBootOption (
-                 &SimpleInitFileGuid,
-                 L"SimpleInit Menu",
-                 LOAD_OPTION_ACTIVE
-                 );
-  (VOID)MenuOption;
-
-  //
-  // Fallback (desativado): a UEFI Shell trava em ASSERT no build DEBUG.
-  // PlatformRegisterFvBootOption (&gUefiShellFileGuid, L"UEFI Shell", LOAD_OPTION_ACTIVE);
-  //
+  (VOID)PlatformRegisterFvBootOption;
+  // SimpleInit menu is disabled: boot directly into UniXNU!
 }
 
 STATIC
@@ -574,6 +556,116 @@ PlatformBootManagerBeforeConsole (
   > Dispatch aditional option roms
   > Special boot: e.g.: USB boot, enter UI
 **/
+STATIC
+VOID
+PlatformTryBootUniXNU (
+  VOID
+  )
+{
+  EFI_STATUS                       Status;
+  UINTN                            HandleCount;
+  EFI_HANDLE                       *Handles;
+  UINTN                            Index;
+  EFI_SIMPLE_FILE_SYSTEM_PROTOCOL  *Fs;
+  EFI_FILE_PROTOCOL                *Root;
+  EFI_FILE_PROTOCOL                *File;
+  EFI_DEVICE_PATH_PROTOCOL         *FilePath;
+  EFI_HANDLE                       AppHandle;
+
+  AsciiPrint ("\n========================================\n");
+  AsciiPrint ("[UniXNU-Boot] Scanning filesystems for UniXNU...\n");
+
+  Status = gBS->LocateHandleBuffer (
+                  ByProtocol,
+                  &gEfiSimpleFileSystemProtocolGuid,
+                  NULL,
+                  &HandleCount,
+                  &Handles
+                  );
+  if (EFI_ERROR (Status) || HandleCount == 0) {
+    AsciiPrint ("[UniXNU-Boot] Locate SimpleFileSystem failed: %r (Count: %lu)\n", Status, HandleCount);
+    
+    // Diagnostic: Check if any BlockIo devices exist
+    {
+      UINTN       BlockCount = 0;
+      EFI_HANDLE  *BlockHandles = NULL;
+      EFI_STATUS  BlockStatus;
+
+      BlockStatus = gBS->LocateHandleBuffer (
+                           ByProtocol,
+                           &gEfiBlockIoProtocolGuid,
+                           NULL,
+                           &BlockCount,
+                           &BlockHandles
+                           );
+      AsciiPrint ("[UniXNU-Boot] Available BlockIo handles: %lu (%r)\n", BlockCount, BlockStatus);
+      if (!EFI_ERROR (BlockStatus) && BlockHandles != NULL) {
+        FreePool (BlockHandles);
+      }
+    }
+
+    AsciiPrint ("========================================\n");
+    gBS->Stall (5000000);
+    return;
+  }
+
+  AsciiPrint ("[UniXNU-Boot] Found %lu filesystem handle(s)\n", HandleCount);
+
+  for (Index = 0; Index < HandleCount; Index++) {
+    Status = gBS->HandleProtocol (
+                    Handles[Index],
+                    &gEfiSimpleFileSystemProtocolGuid,
+                    (VOID **)&Fs
+                    );
+    if (EFI_ERROR (Status)) {
+      continue;
+    }
+
+    Status = Fs->OpenVolume (Fs, &Root);
+    if (EFI_ERROR (Status)) {
+      AsciiPrint ("[UniXNU-Boot] FS[%lu] OpenVolume failed: %r\n", Index, Status);
+      continue;
+    }
+
+    // Try \EFI\BOOT\BOOTAA64.EFI first, then \EFI\UniXNU\UniXNU.efi
+    Status = Root->Open (Root, &File, L"\\EFI\\BOOT\\BOOTAA64.EFI", EFI_FILE_MODE_READ, 0);
+    if (EFI_ERROR (Status)) {
+      Status = Root->Open (Root, &File, L"\\EFI\\UniXNU\\UniXNU.efi", EFI_FILE_MODE_READ, 0);
+      if (!EFI_ERROR (Status)) {
+        File->Close (File);
+        Root->Close (Root);
+        FilePath = FileDevicePath (Handles[Index], L"\\EFI\\UniXNU\\UniXNU.efi");
+      } else {
+        Root->Close (Root);
+        AsciiPrint ("[UniXNU-Boot] FS[%lu] no UniXNU binary found\n", Index);
+        continue;
+      }
+    } else {
+      File->Close (File);
+      Root->Close (Root);
+      FilePath = FileDevicePath (Handles[Index], L"\\EFI\\BOOT\\BOOTAA64.EFI");
+    }
+
+    if (FilePath != NULL) {
+      AsciiPrint ("[UniXNU-Boot] Found UniXNU on FS[%lu]!\n", Index);
+      AsciiPrint ("[UniXNU-Boot] Launching UniXNU application...\n");
+      AsciiPrint ("========================================\n\n");
+
+      Status = gBS->LoadImage (FALSE, gImageHandle, FilePath, NULL, 0, &AppHandle);
+      if (!EFI_ERROR (Status)) {
+        Status = gBS->StartImage (AppHandle, NULL, NULL);
+        AsciiPrint ("[UniXNU-Boot] UniXNU exited: %r\n", Status);
+      } else {
+        AsciiPrint ("[UniXNU-Boot] Failed to LoadImage UniXNU: %r\n", Status);
+      }
+      gBS->Stall (10000000);
+    }
+    break;
+  }
+
+  FreePool (Handles);
+}
+
 VOID
 EFIAPI
 PlatformBootManagerAfterConsole (
@@ -592,6 +684,11 @@ PlatformBootManagerAfterConsole (
   // Connect the rest of the devices.
   //
   EfiBootManagerConnectAll ();
+
+  //
+  // Auto-boot UniXNU if present on any filesystem
+  //
+  PlatformTryBootUniXNU ();
 
   Status = gBS->LocateProtocol (&gEsrtManagementProtocolGuid, NULL,
                   (VOID **)&EsrtManagement);
@@ -658,49 +755,12 @@ PlatformBootManagerUnableToBoot (
   VOID
   )
 {
-  EFI_STATUS                   Status;
-  EFI_INPUT_KEY                Key;
-  EFI_BOOT_MANAGER_LOAD_OPTION BootManagerMenu;
-  UINTN                        Index;
-
-  //
-  // BootManagerMenu doesn't contain the correct information when return status
-  // is EFI_NOT_FOUND.
-  //
-  Status = EfiBootManagerGetBootManagerMenu (&BootManagerMenu);
-  if (EFI_ERROR (Status)) {
-    return;
-  }
-  //
-  // Normally BdsDxe does not print anything to the system console, but this is
-  // a last resort -- the end-user will likely not see any DEBUG messages
-  // logged in this situation.
-  //
-  // AsciiPrint() will NULL-check gST->ConOut internally. We check gST->ConIn
-  // here to see if it makes sense to request and wait for a keypress.
-  //
-  if (gST->ConIn != NULL) {
-    AsciiPrint (
-      "%a: No bootable option or device was found.\n"
-      "%a: Press any key to enter the Boot Manager Menu.\n",
-      gEfiCallerBaseName,
-      gEfiCallerBaseName
-      );
-    Status = gBS->WaitForEvent (1, &gST->ConIn->WaitForKey, &Index);
-    ASSERT_EFI_ERROR (Status);
-    ASSERT (Index == 0);
-
-    //
-    // Drain any queued keys.
-    //
-    while (!EFI_ERROR (gST->ConIn->ReadKeyStroke (gST->ConIn, &Key))) {
-      //
-      // just throw away Key
-      //
-    }
-  }
+  AsciiPrint ("\n========================================\n");
+  AsciiPrint ("[BDS] Unable to boot: No bootable option found.\n");
+  AsciiPrint ("[BDS] Halting in infinite loop.\n");
+  AsciiPrint ("========================================\n");
 
   for (;;) {
-    EfiBootManagerBoot (&BootManagerMenu);
+    gBS->Stall (1000000);
   }
 }
